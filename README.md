@@ -96,4 +96,3 @@ terraform destroy -auto-approve  # Skips confirmation
 ## **Related Files**
 1. `.gitignore` – Excludes Terraform state files, IDE configs, and OS artifacts
 2. GitHub Actions – Pre-merge checks for formatting/validation
-```
