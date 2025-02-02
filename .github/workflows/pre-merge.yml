@@ -1,0 +1,36 @@
+name: Pre Merge - Terraform Checks
+
+on:
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  terraform-checks:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v2
+
+    - name: Terraform Format Check
+      run: |
+        for dir in gcp-org gcp-project-demo gcp-project-dev gcp-project-dns modules; do
+          if [ -d "$dir" ]; then
+            echo "Checking formatting in $dir"
+            terraform fmt -check -recursive "$dir"
+          fi
+        done
+
+    - name: Terraform Validate
+      run: |
+        for dir in gcp-org gcp-project-demo gcp-project-dev gcp-project-dns; do
+          if [ -d "$dir" ]; then
+            echo "Validating Terraform configuration in $dir"
+            cd "$dir"
+            terraform init -backend=false
+            terraform validate
+            cd ..
+          fi
+        done
