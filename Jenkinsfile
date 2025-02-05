@@ -2,7 +2,7 @@ pipeline {
     agent { label 'ubuntu' } // Runs on an Ubuntu agent
 
     triggers {
-        githubPullRequests() // Trigger on PR events
+        pullRequestReview() // Trigger on PR events
     }
 
     environment {
