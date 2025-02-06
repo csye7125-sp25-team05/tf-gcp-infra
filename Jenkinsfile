@@ -1,5 +1,5 @@
 pipeline {
-    agent { label 'ubuntu' } // Runs on an Ubuntu agent
+    agent any // Runs on an Ubuntu agent
 
     triggers {
         pullRequestReview() // Trigger on PR events
