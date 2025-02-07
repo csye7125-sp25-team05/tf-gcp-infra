@@ -1,7 +1,6 @@
 pipeline {
     agent any // Runs on an Ubuntu agent
 
-    
     environment {
         TERRAFORM_VERSION = "1.4.6" // Set Terraform version
     }
@@ -13,9 +12,17 @@ pipeline {
             }
         }
 
-        stage('Setup Terraform') {
+        stage('Install Terraform') {
             steps {
-                sh "terraform --version"
+                sh """
+                echo "Installing Terraform v${TERRAFORM_VERSION}..."
+                sudo apt-get update -y
+                sudo apt-get install -y wget unzip
+                wget -q https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_amd64.zip
+                sudo unzip terraform_${TERRAFORM_VERSION}_linux_amd64.zip -d /usr/local/bin/
+                rm terraform_${TERRAFORM_VERSION}_linux_amd64.zip
+                terraform --version
+                """
             }
         }
 
