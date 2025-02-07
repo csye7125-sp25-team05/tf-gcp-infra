@@ -1,22 +1,3 @@
-# resource "google_folder" "project" {
-#   display_name = var.project_name
-#   parent       = "organizations/${var.organization_id}"
-# }
-
-# # Folder nested under another folder.
-# resource "google_folder" "dev-env" {
-#   display_name = "dev-${var.project_name}"
-#   parent       = google_folder.project.name
-# }
-
-# # Folder nested under another folder.
-# resource "google_folder" "prod-env" {
-#   display_name = "prod-${var.project_name}"
-#   parent       = google_folder.project.name
-# }
-
-# resource "random_uuid" "uuid" {}
-
 data "google_billing_account" "acct" {
   billing_account = var.billing_account
   open            = true
@@ -47,8 +28,8 @@ variable "service_names" {
 resource "google_project_service" "services" {
   for_each = var.service_names
 
-  project = var.project_id
-  service = each.value
+  project                    = var.project_id
+  service                    = each.value
   disable_dependent_services = true
 
   timeouts {
@@ -258,12 +239,12 @@ resource "google_container_cluster" "my_cluster" {
 }
 
 resource "google_container_node_pool" "primary_preemptible_nodes" {
-  project           = var.project_id
-  name              = "my-node-pool"
-  location          = var.region
-  cluster           = google_container_cluster.my_cluster.name
-  node_locations    = var.zones
-  node_count        = 1
+  project        = var.project_id
+  name           = "my-node-pool"
+  location       = var.region
+  cluster        = google_container_cluster.my_cluster.name
+  node_locations = var.zones
+  node_count     = 1
   autoscaling {
 
     total_min_node_count = var.min_node_count
