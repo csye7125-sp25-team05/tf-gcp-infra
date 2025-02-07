@@ -12,20 +12,6 @@ pipeline {
             }
         }
 
-        stage('Install Terraform') {
-            steps {
-                sh """
-                echo "Installing Terraform v${TERRAFORM_VERSION}..."
-                sudo apt-get update -y
-                sudo apt-get install -y wget unzip
-                wget -q https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_amd64.zip
-                sudo unzip terraform_${TERRAFORM_VERSION}_linux_amd64.zip -d /usr/local/bin/
-                rm terraform_${TERRAFORM_VERSION}_linux_amd64.zip
-                terraform --version
-                """
-            }
-        }
-
         stage('Terraform Format Check') {
             steps {
                 script {
