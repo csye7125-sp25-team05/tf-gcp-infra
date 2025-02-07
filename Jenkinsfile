@@ -1,10 +1,7 @@
 pipeline {
     agent any // Runs on an Ubuntu agent
 
-    triggers {
-        pullRequestReview() // Trigger on PR events
-    }
-
+    
     environment {
         TERRAFORM_VERSION = "1.4.6" // Set Terraform version
     }
