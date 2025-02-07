@@ -9,7 +9,7 @@ terraform {
 }
 
 provider "google" {
-  region      = "us-east1"
-  project     = "csye7125-dns-449821"
-  billing_project = "csye7125-dns-449821"
+  region          = "us-east1"
+  project         = "csye7125-project-dev"
+  billing_project = "csye7125-project-dev"
 }
