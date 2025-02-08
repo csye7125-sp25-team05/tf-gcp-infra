@@ -12,6 +12,15 @@ resource "google_project_service" "dns_api" {
 }
 
 # Create a DNS zone
+resource "google_dns_managed_zone" "gcp_zone" {
+  name        = "gcp-zone"
+  dns_name    = "gcp.cyse7125-sp25-05.rocks."
+  description = "Managed zone for gcp subdomain"
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+
 resource "google_dns_managed_zone" "dev_zone" {
   name        = "dev-gcp-zone"
   dns_name    = "dev.gcp.cyse7125-sp25-05.rocks."
@@ -31,6 +40,10 @@ resource "google_dns_managed_zone" "prd_zone" {
 }
 
 # Output the name servers
+output "gcp_name_servers" {
+  value = google_dns_managed_zone.gcp_zone.name_servers
+}
+
 output "dev_name_servers" {
   value = google_dns_managed_zone.dev_zone.name_servers
 }
