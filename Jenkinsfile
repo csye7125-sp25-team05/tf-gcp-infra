@@ -11,9 +11,18 @@ pipeline {
                 checkout scm
             }
         }
-        stage('Check Terraform') {
+        stage('Install Terraform') {
             steps {
-                sh 'terraform init'
+                script {
+                    sh """
+                    # Install Terraform dynamically inside Jenkins pipeline
+                    curl -fsSL https://releases.hashicorp.com/terraform/1.10.5/terraform_1.10.5_linux_amd64.zip -o terraform.zip
+                    unzip terraform.zip
+                    sudo mv terraform /usr/local/bin/
+                    rm terraform.zip
+                    terraform --version
+                    """
+                }
             }
         }
         stage('Terraform Format Check') {
