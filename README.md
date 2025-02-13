@@ -1,5 +1,4 @@
 # tf-gcp-infra
-This is a test
 Terraform setup, workflow, and infrastructure destruction for the `tf-gcp-infra` repository.
 ---
 This is a test
