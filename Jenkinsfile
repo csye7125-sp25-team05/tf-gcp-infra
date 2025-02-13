@@ -11,7 +11,12 @@ pipeline {
                 checkout scm
             }
         }
-
+        stage('Check Terraform') {
+            steps {
+                sh 'which terraform'
+                sh 'terraform version'
+            }
+        }
         stage('Terraform Format Check') {
             steps {
                 script {
