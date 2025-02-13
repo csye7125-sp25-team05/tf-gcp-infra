@@ -13,8 +13,7 @@ pipeline {
         }
         stage('Check Terraform') {
             steps {
-                sh 'which terraform'
-                sh 'terraform version'
+                sh 'terraform init'
             }
         }
         stage('Terraform Format Check') {
