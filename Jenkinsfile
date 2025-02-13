@@ -1,8 +1,13 @@
 pipeline {
-    agent any // Runs on an Ubuntu agent
+    agent {
+        docker {
+            image 'hashicorp/terraform:latest'  // Uses the official Terraform image
+            args '--user root'  // Runs as root to avoid permission issues
+        }
+    }
 
     environment {
-        TERRAFORM_VERSION = "1.4.6" // Set Terraform version
+        TF_VERSION = "1.10.5"
     }
 
     stages {
@@ -11,21 +16,7 @@ pipeline {
                 checkout scm
             }
         }
-        stage('Install Terraform') {
-            steps {
-                script {
-                    sh """
-                    # Install Terraform dynamically inside Jenkins pipeline
-                    sudo apt install unzip
-                    curl -fsSL https://releases.hashicorp.com/terraform/1.10.5/terraform_1.10.5_linux_amd64.zip -o terraform.zip
-                    unzip terraform.zip
-                    sudo mv terraform /usr/local/bin/
-                    rm terraform.zip
-                    terraform --version
-                    """
-                }
-            }
-        }
+        
         stage('Terraform Format Check') {
             steps {
                 script {
