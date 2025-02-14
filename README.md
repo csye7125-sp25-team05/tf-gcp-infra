@@ -1,7 +1,6 @@
 # tf-gcp-infra
 Terraform setup, workflow, and infrastructure destruction for the `tf-gcp-infra` repository.
 ---
-This is a test
 ## **Installation**
 
 ### **macOS (Homebrew)**
