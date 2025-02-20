@@ -17,7 +17,7 @@ variable "service_names" {
     "cloud-billing"        = "cloudbilling.googleapis.com"
     "compute"              = "compute.googleapis.com"
     "container"            = "container.googleapis.com"
-    "dns"                  = "dns.googleapis.com"
+    "dns"                  = "dns.googleapis.com" 
     "serviceusage"         = "serviceusage.googleapis.com"
     "vpc"                  = "vpcaccess.googleapis.com"
     "cloudresourcemanager" = "cloudresourcemanager.googleapis.com"
@@ -25,7 +25,7 @@ variable "service_names" {
 }
 
 # Create Google project services using a for_each loop
-resource "google_project_service" "services" {
+ resource "google_project_service" "services" {
   for_each = var.service_names
 
   project                    = var.project_id
