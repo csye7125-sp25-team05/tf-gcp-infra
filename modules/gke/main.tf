@@ -21,6 +21,7 @@ variable "service_names" {
     "serviceusage"         = "serviceusage.googleapis.com"
     "vpc"                  = "vpcaccess.googleapis.com"
     "cloudresourcemanager" = "cloudresourcemanager.googleapis.com"
+    "cloudkms"             = "cloudkms.googleapis.com"
   }
 }
 
@@ -179,7 +180,23 @@ resource "google_compute_instance" "bastion_host" {
     google_compute_subnetwork.private_subnet,
   ]
 
-  metadata_startup_script = file("${path.module}/init_script.sh")
+  metadata_startup_script = <<-EOT
+  #!/bin/bash
+  exec > /var/log/startup-script.log 2>&1  # Redirect logs to a file for debugging
+
+  echo "********* Setup kubectl *********"
+  sudo apt-get update
+  sudo apt-get install -y apt-transport-https ca-certificates curl gpg kubectl
+
+  curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.29/deb/Release.key | sudo gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+  echo 'deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.29/deb/ /' | sudo tee /etc/apt/sources.list.d/kubernetes.list
+
+  sudo apt-get update
+  sudo apt-get install -y kubectl
+
+  echo "********* kubectl Installation Completed *********"
+EOT
+
 
 }
 
@@ -198,13 +215,7 @@ resource "google_container_cluster" "my_cluster" {
   remove_default_node_pool = true
   initial_node_count       = 1
 
-  node_config {
-    service_account = google_service_account.gke_sa.email
-    disk_type       = "pd-standard"
-    oauth_scopes = [
-      "https://www.googleapis.com/auth/cloud-platform"
-    ]
-  }
+  min_master_version = "1.30.9"
 
   private_cluster_config {
     enable_private_nodes    = true
@@ -235,33 +246,138 @@ resource "google_container_cluster" "my_cluster" {
       display_name = "Jenkins Server access to cluster"
     }
   }
+
   deletion_protection = false
 }
 
-resource "google_container_node_pool" "primary_preemptible_nodes" {
-  project        = var.project_id
-  name           = "my-node-pool"
+resource "google_container_node_pool" "node-pool-1" {
+  name           = "node-pool-1"
   location       = var.region
   cluster        = google_container_cluster.my_cluster.name
-  node_locations = var.zones
   node_count     = 1
-  autoscaling {
-
-    total_min_node_count = var.min_node_count
-    total_max_node_count = var.max_node_count
-    # location_policy = "BALANCED"
-  }
+  node_locations = ["us-east1-b"]
 
   node_config {
-    machine_type = var.node_machine_type
-    image_type   = "COS_CONTAINERD"
-    disk_type    = "pd-standard"
-    labels = {
-      team = "gke"
-    }
     service_account = google_service_account.gke_sa.email
+    image_type      = "COS_CONTAINERD"
+    machine_type    = "e2-medium"
+    disk_type       = "pd-standard"
     oauth_scopes = [
       "https://www.googleapis.com/auth/cloud-platform"
     ]
+  }
+}
+
+resource "google_container_node_pool" "node-pool-2" {
+  name           = "node-pool-2"
+  location       = var.region
+  cluster        = google_container_cluster.my_cluster.name
+  node_count     = 1
+  node_locations = ["us-east1-c"]
+
+  node_config {
+    service_account = google_service_account.gke_sa.email
+    image_type      = "COS_CONTAINERD"
+    machine_type    = "e2-medium"
+    disk_type       = "pd-standard"
+    oauth_scopes = [
+      "https://www.googleapis.com/auth/cloud-platform"
+    ]
+  }
+}
+
+resource "google_container_node_pool" "node-pool-3" {
+  name           = "node-pool-3"
+  location       = var.region
+  cluster        = google_container_cluster.my_cluster.name
+  node_count     = 1
+  node_locations = ["us-east1-d"]
+
+  node_config {
+    service_account = google_service_account.gke_sa.email
+    image_type      = "COS_CONTAINERD"
+    machine_type    = "e2-medium"
+    disk_type       = "pd-standard"
+    oauth_scopes = [
+      "https://www.googleapis.com/auth/cloud-platform"
+    ]
+  }
+}
+
+// Fetch existing GKE KeyRing (if it exists)
+data "google_kms_key_ring" "existing_gke_key_ring" {
+  name     = "gke-key-ring"
+  location = var.region
+  project  = var.project_id
+}
+
+// Create GKE KeyRing ONLY if it does not exist
+resource "google_kms_key_ring" "gke_key_ring" {
+  count    = length(data.google_kms_key_ring.existing_gke_key_ring.id) > 0 ? 0 : 1
+  name     = "gke-key-ring"
+  location = var.region
+  project  = var.project_id
+}
+
+// Determine the correct KeyRing ID
+locals {
+  gke_key_ring_id = length(data.google_kms_key_ring.existing_gke_key_ring.id) > 0 ? data.google_kms_key_ring.existing_gke_key_ring.id : google_kms_key_ring.gke_key_ring[0].id
+}
+
+// Fetch existing GKE Crypto Key (if it exists)
+data "google_kms_crypto_key" "existing_gke_crypto_key" {
+  name     = "gke-encryption-key"
+  key_ring = local.gke_key_ring_id
+}
+
+// Create GKE Crypto Key ONLY if it does not exist
+resource "google_kms_crypto_key" "gke_crypto_key" {
+  count           = length(data.google_kms_crypto_key.existing_gke_crypto_key.id) > 0 ? 0 : 1
+  name            = "gke-encryption-key"
+  key_ring        = local.gke_key_ring_id
+  rotation_period = "2592000s" # 30 days
+
+  lifecycle {
+    prevent_destroy = false
+  }
+}
+
+// ====================================================================
+
+// Fetch existing SOPS KeyRing (if it exists)
+data "google_kms_key_ring" "existing_sops_key_ring" {
+  name     = "sops-key-ring"
+  location = var.region
+  project  = var.project_id
+}
+
+// Create SOPS KeyRing ONLY if it does not exist
+resource "google_kms_key_ring" "sops_key_ring" {
+  count    = length(data.google_kms_key_ring.existing_sops_key_ring.id) > 0 ? 0 : 1
+  name     = "sops-key-ring"
+  location = var.region
+  project  = var.project_id
+}
+
+// Determine the correct KeyRing ID
+locals {
+  sops_key_ring_id = length(data.google_kms_key_ring.existing_sops_key_ring.id) > 0 ? data.google_kms_key_ring.existing_sops_key_ring.id : google_kms_key_ring.sops_key_ring[0].id
+}
+
+// Fetch existing SOPS Crypto Key (if it exists)
+data "google_kms_crypto_key" "existing_sops_crypto_key" {
+  name     = "sops-encryption-key"
+  key_ring = local.sops_key_ring_id
+}
+
+// Create SOPS Crypto Key ONLY if it does not exist
+resource "google_kms_crypto_key" "sops_crypto_key" {
+  count           = length(data.google_kms_crypto_key.existing_sops_crypto_key.id) > 0 ? 0 : 1
+  name            = "sops-encryption-key"
+  key_ring        = local.sops_key_ring_id
+  rotation_period = "2592000s" # 30 days
+
+  lifecycle {
+    prevent_destroy = false
   }
 }
