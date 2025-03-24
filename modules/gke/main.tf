@@ -21,7 +21,6 @@ variable "service_names" {
     "serviceusage"         = "serviceusage.googleapis.com"
     "vpc"                  = "vpcaccess.googleapis.com"
     "cloudresourcemanager" = "cloudresourcemanager.googleapis.com"
-    "cloudkms"             = "cloudkms.googleapis.com"
   }
 }
 
@@ -129,7 +128,7 @@ resource "google_compute_firewall" "instance_firewall" {
   direction = "INGRESS"
   allow {
     protocol = "tcp"
-    ports    = ["22"]
+    ports    = ["22", "80", "443"]
   }
 
   source_ranges = ["0.0.0.0/0"]
@@ -381,3 +380,107 @@ resource "google_kms_crypto_key" "sops_crypto_key" {
     prevent_destroy = false
   }
 }
+
+# Service Account for Cloud Storage
+resource "google_service_account" "gcs_sa" {
+  account_id   = "gcs-access-sa"
+  display_name = "Service Account for GCS Access"
+}
+
+# IAM Binding for GCS Access
+resource "google_project_iam_member" "gcs_sa_binding" {
+  project = var.project_id
+  role    = "roles/storage.admin"  
+  member  = "serviceAccount:${google_service_account.gcs_sa.email}"
+}
+
+# Workload Identity Binding
+resource "google_service_account_iam_binding" "workload_identity_binding" {
+  service_account_id = google_service_account.gcs_sa.name
+  role               = "roles/iam.workloadIdentityUser"
+  
+  members = [
+    "serviceAccount:${var.project_id}.svc.id.goog[api-server/api-server-sa]" 
+  ]
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# # resource "google_storage_bucket_iam_member" "gke_sa_storage_admin" {
+# #   bucket = "csye7125-sp25-05"
+# #   role   = "roles/storage.objectAdmin"
+# #   member = "serviceAccount:${google_service_account.gke_sa.email}"
+# # }
+
+# # Kubernetes provider configuration
+# data "google_client_config" "default" {}
+
+# provider "kubernetes" {
+#   host                   = "https://${google_container_cluster.my_cluster.endpoint}"
+#   token                  = data.google_client_config.default.access_token
+#   cluster_ca_certificate = base64decode(google_container_cluster.my_cluster.master_auth[0].cluster_ca_certificate)
+# }
+
+# # Create namespace for your application
+# resource "kubernetes_namespace" "app_namespace" {
+#   metadata {
+#     name = "api-server"
+#   }
+#   depends_on = [
+#     google_container_node_pool.node-pool-1,
+#     google_container_cluster.my_cluster
+#   ]
+# }
+
+# resource "kubernetes_service_account" "pdf_uploader_sa" {
+#   metadata {
+#     name      = "pdf-uploader-sa"
+#     namespace = kubernetes_namespace.app_namespace.metadata[0].name
+#     annotations = {
+#       "iam.gke.io/gcp-service-account" = google_service_account.gke_sa.email
+#     }
+#   }
+#   depends_on = [
+#     kubernetes_namespace.app_namespace
+#   ]
+# }
+
+# resource "google_storage_bucket_iam_member" "gke_sa_storage_admin" {
+#   bucket = "csye7125-sp25-05"
+#   role   = "roles/storage.objectAdmin"
+#   member = "principal://iam.googleapis.com/projects/${var.project_no}/locations/global/workloadIdentityPools/${var.project_id}.svc.id.goog/subject/ns/${kubernetes_namespace.app_namespace.metadata[0].name}/sa/${kubernetes_service_account.pdf_uploader_sa.metadata[0].name}"
+# }

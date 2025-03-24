@@ -91,3 +91,8 @@ variable "ssh_private_key" {
   type = string
 
 }
+
+variable "project_no" {
+  description = "The numeric identifier of the project"
+  type        = string
+}
