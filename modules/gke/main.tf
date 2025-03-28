@@ -390,7 +390,7 @@ resource "google_service_account" "gcs_sa" {
 # IAM Binding for GCS Access
 resource "google_project_iam_member" "gcs_sa_binding" {
   project = var.project_id
-  role    = "roles/storage.admin"  
+  role    = "roles/storage.admin"
   member  = "serviceAccount:${google_service_account.gcs_sa.email}"
 }
 
@@ -398,9 +398,13 @@ resource "google_project_iam_member" "gcs_sa_binding" {
 resource "google_service_account_iam_binding" "workload_identity_binding" {
   service_account_id = google_service_account.gcs_sa.name
   role               = "roles/iam.workloadIdentityUser"
-  
+
+
+  # members = [
+  #   "serviceAccount:${var.project_id}.svc.id.goog[backup-operator/backup-operator-controller]"
+  # ]
   members = [
-    "serviceAccount:${var.project_id}.svc.id.goog[api-server/api-server-sa]" 
+    "serviceAccount:${var.project_id}.svc.id.goog[api-server/api-server-sa]"
   ]
 }
 
