@@ -18,4 +18,7 @@ module "gke" {
   node_machine_type      = var.node_machine_type
   ssh_private_key        = var.ssh_private_key
   env                    = var.env
+  github_token           = var.github_token
+  istio_namespace        = var.istio_namespace
+  cert_manager_namespace = var.cert_manager_namespace
 }
