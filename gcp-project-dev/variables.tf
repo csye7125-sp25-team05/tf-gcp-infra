@@ -43,6 +43,12 @@ variable "k8s_service_range" {
   description = "The CIDR range for Kubernetes services"
 }
 
+variable "github_token" {
+  type        = string
+  description = "GitHub personal access token for cloning the repository"
+  sensitive   = true
+}
+
 variable "ssh_username" {
   type        = string
   description = "The SSH username for the bastion host"
@@ -92,4 +98,22 @@ variable "project_no" {
   description = "The numeric identifier of the project"
   type        = string
   default     = "567458964636"
+}
+
+variable "local_ip" {
+  type        = string
+  description = "Your local machine's public IP for GKE control plane access"
+  default     = "0.0.0.0/0"  # Default is open to all (not recommended for production)
+}
+
+variable "istio_namespace" {
+  type        = string
+  description = "Name of the Istio system namespace"
+  default     = "istio-system"
+}
+
+variable "cert_manager_namespace" {
+  type        = string
+  description = "Name of the Cert-Manager namespace"
+  default     = "cert-manager"
 }
