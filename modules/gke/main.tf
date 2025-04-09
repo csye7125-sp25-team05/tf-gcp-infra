@@ -292,7 +292,7 @@ resource "google_container_cluster" "my_cluster" {
       display_name = "Jenkins Server access to cluster"
     }
     cidr_blocks {
-      cidr_block   = "${var.local_ip}"
+      cidr_block   = var.local_ip
       display_name = "Local Machine Terraform Access"
     }
   }
@@ -300,15 +300,15 @@ resource "google_container_cluster" "my_cluster" {
   # Enable Cloud Logging
   logging_config {
     enable_components = [
-      "SYSTEM_COMPONENTS",  # System logs (e.g., kubelet, container runtime)
-      "WORKLOADS"           # Application logs from workloads
+      "SYSTEM_COMPONENTS", # System logs (e.g., kubelet, container runtime)
+      "WORKLOADS"          # Application logs from workloads
     ]
   }
 
   # Enable Cloud Monitoring
   monitoring_config {
     enable_components = [
-      "SYSTEM_COMPONENTS"   # System metrics (e.g., CPU, memory)
+      "SYSTEM_COMPONENTS" # System metrics (e.g., CPU, memory)
     ]
 
     # Enable Managed Prometheus for custom metrics
@@ -320,7 +320,7 @@ resource "google_container_cluster" "my_cluster" {
   deletion_protection = false
 
   depends_on = [
-    google_project_service.services["logging"],      
+    google_project_service.services["logging"],
     google_project_service.services["monitoring"],
     google_project_service.services["container"]
   ]
@@ -505,15 +505,15 @@ resource "google_project_iam_audit_config" "gke_audit_logs" {
   service = "container.googleapis.com"
 
   audit_log_config {
-    log_type = "ADMIN_READ"  # Logs admin activity reads
+    log_type = "ADMIN_READ" # Logs admin activity reads
   }
 
   audit_log_config {
-    log_type = "DATA_READ"   # Logs data read operations
+    log_type = "DATA_READ" # Logs data read operations
   }
 
   audit_log_config {
-    log_type = "DATA_WRITE"  # Logs data write operations
+    log_type = "DATA_WRITE" # Logs data write operations
   }
 
   depends_on = [
@@ -543,7 +543,7 @@ provider "kubernetes" {
 # Define the Istio system namespace
 resource "kubernetes_namespace" "istio_system" {
   metadata {
-    name = "${var.istio_namespace}"
+    name = var.istio_namespace
   }
   depends_on = [
     google_container_cluster.my_cluster,
@@ -554,7 +554,7 @@ resource "kubernetes_namespace" "istio_system" {
 # Define the Cert-Manager namespace
 resource "kubernetes_namespace" "cert_manager" {
   metadata {
-    name = "${var.cert_manager_namespace}"
+    name = var.cert_manager_namespace
   }
   depends_on = [
     google_container_cluster.my_cluster,

@@ -87,3 +87,9 @@ variable "env" {
   type        = string
   description = "The environment (e.g., dev, prod)"
 }
+
+variable "project_no" {
+  description = "The numeric identifier of the project"
+  type        = string
+  default     = "567458964636"
+}

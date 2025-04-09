@@ -2,6 +2,7 @@ module "gke" {
   source = "../modules/gke"
 
   project_id             = var.project_id
+  project_no             = var.project_no
   organization_id        = var.organization_id
   billing_account        = var.billing_account
   region                 = var.region
