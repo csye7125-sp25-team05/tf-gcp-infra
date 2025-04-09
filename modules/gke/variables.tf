@@ -44,7 +44,7 @@ variable "github_token" {
   type        = string
   description = "GitHub personal access token for cloning the repository"
   sensitive   = true
-  default     = "" 
+  default     = ""
 }
 
 variable "ssh_username" {
