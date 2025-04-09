@@ -103,7 +103,7 @@ variable "project_no" {
 variable "local_ip" {
   type        = string
   description = "Your local machine's public IP for GKE control plane access"
-  default     = "0.0.0.0/0"  # Default is open to all (not recommended for production)
+  default     = "0.0.0.0/0" # Default is open to all (not recommended for production)
 }
 
 variable "istio_namespace" {
