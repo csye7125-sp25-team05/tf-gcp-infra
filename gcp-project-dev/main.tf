@@ -21,4 +21,6 @@ module "gke" {
   github_token           = var.github_token
   istio_namespace        = var.istio_namespace
   cert_manager_namespace = var.cert_manager_namespace
+  api_domain_name        = var.api_domain_name
+  dns_zone_name          = var.dns_zone_name
 }

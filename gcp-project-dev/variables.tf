@@ -1,8 +1,3 @@
-# variable "project_name" {
-#   type        = string
-#   description = "The name of the project"
-# }
-
 variable "organization_id" {
   type        = string
   description = "The ID of the organization"
@@ -117,4 +112,15 @@ variable "cert_manager_namespace" {
   type        = string
   description = "Name of the Cert-Manager namespace"
   default     = "cert-manager"
+}
+
+variable "api_domain_name" {
+  type        = string
+  description = "The name of the Domain"
+}
+
+variable "dns_zone_name" {
+  type        = string
+  description = "The name of the DNS zone"
+  default     = "tf-gcp-zone"
 }

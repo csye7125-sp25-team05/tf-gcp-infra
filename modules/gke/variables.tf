@@ -102,3 +102,28 @@ variable "cert_manager_namespace" {
   description = "Name of the Cert-Manager namespace"
   default     = "cert-manager"
 }
+
+variable "api_domain_name" {
+  type        = string
+  description = "The name of the Domain"
+}
+
+variable "cert_manager_email" {
+  description = "Email address for Let's Encrypt notifications"
+  type        = string
+  default     = "shahharsh8563@cyse7125-sp25-05.rocks"
+}
+
+variable "app_namespace" {
+  default = "api-server"
+}
+
+variable "dns_zone_name" {
+  default     = "dev-gcp-zone"
+  type        = string
+  description = "The DNS zone name for the API domain"
+}
+
+variable "hosted_zone_name" {
+  default = "demo-cyse7125-sp25-05-zone"
+}
