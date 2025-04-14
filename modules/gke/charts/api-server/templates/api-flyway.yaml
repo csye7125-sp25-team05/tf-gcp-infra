@@ -1,0 +1,44 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: flyway-migrator
+  namespace: api-server
+spec:
+  backoffLimit: 0
+  template:
+    metadata:
+      annotations:
+        istio.io/rev: {{.Values.istio.revision}}
+        traffic.sidecar.istio.io/excludeOutboundPorts: "{{.Values.istio.excludeOutboundPorts}}"
+    spec:
+      restartPolicy: Never
+      serviceAccountName: api-server-sa
+      containers:
+        - name: flyway-migrate
+          image: {{ .Values.apiServer.flywayImage }}
+          imagePullPolicy: Always
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              echo "Waiting for Postgres...";
+              until nc -z {{ .Values.postgresService.serviceName }}.{{ .Values.namespace.db }}.svc.cluster.local 5432; do sleep 2; done
+
+              echo "Running Flyway migration...";
+              flyway migrate -validateMigrationNaming=true
+
+              echo "Done"
+          env:
+            - name: FLYWAY_URL
+              value: jdbc:postgresql://{{ .Values.postgresService.serviceName }}.{{ .Values.namespace.db }}.svc.cluster.local:5432/api
+            - name: FLYWAY_USER
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secrets
+                  key: POSTGRES_USER
+            - name: FLYWAY_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secrets
+                  key: POSTGRES_PASSWORD
+      imagePullSecrets:
+      - name: docker-registry-auth

@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: docker-registry-auth
+  namespace: {{ .Values.namespace.app }}
+type: kubernetes.io/dockerconfigjson
+stringData:
+  .dockerconfigjson: |
+    {
+      "auths": {
+        "docker.io": {
+          "username": "{{ .Values.docker.username }}",
+          "password": "{{ .Values.docker.password }}",
+          "email": "{{ .Values.docker.email }}",
+          "auth": "{{ .Values.docker.auth }}"
+        }
+      }
+    }
+

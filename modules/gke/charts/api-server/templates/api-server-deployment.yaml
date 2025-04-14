@@ -1,0 +1,90 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.appName }}
+  namespace: {{ .Values.apiServer.namespace }}
+spec:
+  replicas: {{ .Values.apiServer.replicas }}
+  selector:
+    matchLabels:
+      app:  {{ .Values.appName }}
+  template:
+    metadata:
+      labels:
+        app:  {{ .Values.appName }}
+      annotations:
+        istio.io/rev: {{.Values.istio.revision}}
+        traffic.sidecar.istio.io/excludeOutboundPorts: "{{.Values.istio.excludeOutboundPorts}}"
+    spec:
+      initContainers:
+        - name: wait-for-postgres
+          image: busybox
+          command: ['sh', '-c', 'until nc -z {{ .Values.postgresService.serviceName }}.{{ .Values.namespace.db }}.svc.cluster.local 5432; do echo waiting for postgres; sleep 2; done;']
+        - name: flyway-migration
+          image: {{ .Values.apiServer.flywayImage }}
+          imagePullPolicy: Always
+          command: ["flyway", "migrate", "-validateMigrationNaming=true"]
+          env:
+          - name: FLYWAY_URL
+            value: jdbc:postgresql://{{ .Values.postgresService.serviceName }}.{{ .Values.namespace.db }}.svc.cluster.local:5432/api
+          - name: FLYWAY_USER
+            valueFrom:
+              secretKeyRef:
+                name: postgres-secrets
+                key: POSTGRES_USER
+          - name: FLYWAY_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: postgres-secrets
+                key: POSTGRES_PASSWORD
+
+      serviceAccountName: api-server-sa
+      containers:
+      - name: api-server
+        image: {{ .Values.apiServer.image }}
+        ports:
+        - containerPort: 8080
+        env:
+        - name: DB_USER
+          valueFrom:
+            secretKeyRef:
+              name: postgres-secrets
+              key: POSTGRES_USER
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: postgres-secrets
+              key: POSTGRES_PASSWORD
+        - name: ENVIRONMENT
+          value: "prod"
+        - name: DB_HOST
+          value: "{{ .Values.postgresService.serviceName }}.{{ .Values.namespace.db }}.svc.cluster.local"
+        - name: DB_PORT
+          value: "5432"
+        - name: DB_NAME
+          value: "api"
+        - name: BUCKET_NAME
+          value: "{{ .Values.apiServer.bucketName }}"
+        - name: PROJECT_ID
+          value: "{{ .Values.apiServer.projectId }}"
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 15
+          periodSeconds: 20
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+      imagePullSecrets:
+      - name: docker-registry-auth

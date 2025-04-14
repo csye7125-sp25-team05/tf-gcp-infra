@@ -1,0 +1,48 @@
+# Namespace for cert-manager resources
+namespace: cert-manager
+
+# CloudDNS service account secret
+clouddnsSecret:
+  create: true
+  name: clouddns-dns01-solver-sa
+  keyName: key.json
+
+# ClusterIssuer configuration
+clusterIssuer:
+  create: true
+  name: letsencrypt-prod
+  email: admin@example.com
+  server: https://acme-v02.api.letsencrypt.org/directory 
+  privateKeySecretName: letsencrypt-prod-account-key
+  solvers:
+    http01:
+      enabled: true
+      ingressClass: nginx
+    dns01:
+      enabled: true
+      project: "my-project-id"
+      secretName: clouddns-dns01-solver-sa
+
+# Certificate resources
+certificates:
+  - name: api-server-tls
+    namespace: api-server
+    secretName: api-server-tls-secret
+    duration: 2160h # 90 days
+    renewBefore: 360h # 15 days
+    dnsNames:
+      - api.example.com
+    issuerRef:
+      name: letsencrypt-prod
+      kind: ClusterIssuer
+      
+  - name: webapp-tls
+    namespace: api-server
+    secretName: webapp-tls-secret
+    duration: 2160h
+    renewBefore: 360h
+    dnsNames:
+      - app.example.com
+    issuerRef:
+      name: letsencrypt-prod
+      kind: ClusterIssuer

@@ -1,0 +1,42 @@
+# Exclude Helm-related files
+
+\*.tgz
+.chart-releaser.yaml
+.DS_Store
+
+# Ignore version control directories
+
+.git/
+.gitignore
+.github/
+.gitlab/
+.vscode/
+.idea/
+
+# Ignore OS and editor-specific files
+
+_.swp
+_.bak
+_.tmp
+_.log
+\*.out
+
+# Ignore local configurations and environment files
+
+.env
+_.env
+_.local
+
+# Ignore build artifacts and dependencies
+
+node_modules/
+vendor/
+target/
+bin/
+dist/
+
+# Ignore Kubernetes manifests that shouldn't be packaged
+
+kustomization.yaml
+_.kustomize
+_.bak

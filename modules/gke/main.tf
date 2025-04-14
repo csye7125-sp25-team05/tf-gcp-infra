@@ -123,6 +123,12 @@ resource "google_service_account" "bastion_host_sa" {
   display_name = "My Compute Instance Service Account"
 }
 
+resource "google_project_iam_member" "bastion_host_cluster_viewer" {
+  project = var.project_id
+  role    = "roles/container.clusterViewer"
+  member  = "serviceAccount:${google_service_account.bastion_host_sa.email}"
+}
+
 resource "google_compute_instance" "bastion_host" {
   project                   = var.project_id
   name                      = "bastion-host"
@@ -164,6 +170,25 @@ resource "google_compute_instance" "bastion_host" {
   metadata_startup_script = <<-EOT
   #!/bin/bash
   exec > /var/log/startup-script.log 2>&1  # Redirect logs to a file for debugging
+
+  # Set KUBECONFIG to a specific path
+  export KUBECONFIG=/root/.kube/config
+  export HOME=/root
+  mkdir -p /root/.kube
+
+  echo "********* Install gcloud CLI *********"
+  sudo apt-get update
+  sudo apt-get install -y apt-transport-https ca-certificates curl gnupg
+  curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg
+  echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" | sudo tee /etc/apt/sources.list.d/google-cloud-sdk.list
+  sudo apt-get update
+  sudo apt-get install -y google-cloud-sdk google-cloud-sdk-gke-gcloud-auth-plugin
+
+  echo "********* Configure gcloud *********"
+  gcloud config set project ${var.project_id}
+
+  echo "********* Get GKE Cluster Credentials *********"
+  gcloud container clusters get-credentials my-gke-cluster --region=us-east1 --project=${var.project_id}
 
   echo "********* Setup kubectl *********"
   sudo apt-get update
@@ -551,17 +576,6 @@ resource "kubernetes_namespace" "istio_system" {
   ]
 }
 
-# Define the Cert-Manager namespace
-resource "kubernetes_namespace" "cert_manager" {
-  metadata {
-    name = var.cert_manager_namespace
-  }
-  depends_on = [
-    google_container_cluster.my_cluster,
-    google_container_node_pool.node-pool-1
-  ]
-}
-
 resource "kubernetes_namespace" "monitoring" {
   metadata {
     name = "monitoring"
@@ -648,63 +662,408 @@ resource "kubernetes_cluster_role_binding" "gmp_operator_binding" {
   ]
 }
 
-resource "kubernetes_manifest" "istio_pod_monitor" {
-  manifest = {
-    apiVersion = "monitoring.googleapis.com/v1"
-    kind       = "PodMonitoring"
-    metadata = {
-      name      = "istio-components"
-      namespace = var.istio_namespace
-    }
-    spec = {
-      selector = {
-        matchLabels = {
-          "istio.io/rev" = "custom"
-        }
-      }
-      endpoints = [
-        {
-          port     = "http-envoy-prom"
-          path     = "/stats/prometheus"
-          interval = "30s"
-        }
-      ]
-    }
+
+## Cert Manager infra for terraform 
+
+resource "google_service_account" "dns_admin" {
+  account_id   = "dns-admin-sa"
+  display_name = "DNS Admin Service Account"
+  project      = var.project_id
+}
+
+# Bind the dns.admin role to the service account
+resource "google_project_iam_member" "dns_admin_binding" {
+  project    = var.project_id
+  role       = "roles/dns.admin"
+  member     = "serviceAccount:${google_service_account.dns_admin.email}"
+  depends_on = [google_service_account.dns_admin]
+}
+
+provider "kubectl" {
+  host                   = "https://${google_container_cluster.my_cluster.endpoint}"
+  token                  = data.google_client_config.default.access_token
+  cluster_ca_certificate = base64decode(google_container_cluster.my_cluster.master_auth[0].cluster_ca_certificate)
+  load_config_file       = false
+}
+
+provider "helm" {
+  kubernetes {
+    host                   = "https://${google_container_cluster.my_cluster.endpoint}"
+    token                  = data.google_client_config.default.access_token
+    cluster_ca_certificate = base64decode(google_container_cluster.my_cluster.master_auth[0].cluster_ca_certificate)
+  }
+}
+
+# Ensure the cert-manager namespace exists explicitly
+resource "kubernetes_namespace" "cert_manager" {
+  metadata {
+    name = "cert-manager"
   }
   depends_on = [
-    time_sleep.wait_for_kubernetes,
     google_container_cluster.my_cluster,
     google_container_node_pool.node-pool-1,
-    kubernetes_namespace.istio_system
+    google_container_node_pool.node-pool-2,
+    google_container_node_pool.node-pool-3,
+    time_sleep.wait_for_kubernetes
   ]
 }
 
-resource "kubernetes_manifest" "cert_manager_pod_monitor" {
-  manifest = {
-    apiVersion = "monitoring.googleapis.com/v1"
-    kind       = "PodMonitoring"
-    metadata = {
-      name      = "cert-manager"
-      namespace = var.cert_manager_namespace
-    }
-    spec = {
-      selector = {
-        matchLabels = {
-          "app.kubernetes.io/name" = "cert-manager"
-        }
-      }
-      endpoints = [
-        {
-          port     = "metrics"
-          interval = "30s"
-        }
-      ]
+# Create the Kubernetes service account before the Helm release
+resource "kubernetes_service_account" "cert_manager_sa" {
+  metadata {
+    name      = "cert-manager"
+    namespace = "cert-manager"
+    annotations = {
+      "iam.gke.io/gcp-service-account" = google_service_account.cert_manager_dns_sa.email
     }
   }
   depends_on = [
-    time_sleep.wait_for_kubernetes,
-    google_container_cluster.my_cluster,
-    google_container_node_pool.node-pool-1,
     kubernetes_namespace.cert_manager
   ]
 }
+
+resource "helm_release" "cert_manager" {
+  name             = "cert-manager"
+  repository       = "https://charts.jetstack.io"
+  chart            = "cert-manager"
+  namespace        = "cert-manager"
+  create_namespace = false # Set to false since we manage the namespace explicitly
+  version          = "v1.13.2"
+  timeout          = 600 # Increase timeout to 10 minutes
+
+  set {
+    name  = "installCRDs"
+    value = "true"
+  }
+
+  set {
+    name  = "serviceAccount.create"
+    value = "false" # We create the service account ourselves
+  }
+
+  set {
+    name  = "serviceAccount.name"
+    value = "cert-manager"
+  }
+
+  depends_on = [
+    google_container_cluster.my_cluster,
+    kubernetes_service_account.cert_manager_sa, # Depend on the service account
+    kubernetes_namespace.cert_manager           # Depend on the namespace
+  ]
+}
+
+# Create DNS Solver service account
+resource "google_service_account" "cert_manager_dns_sa" {
+  account_id   = "cert-manager-dns-solver"
+  display_name = "Service Account for cert-manager DNS-01 challenges"
+  project      = var.project_id
+}
+
+resource "google_project_iam_member" "cert_manager_dns_admin" {
+  project = var.project_id
+  role    = "roles/dns.admin"
+  member  = "serviceAccount:${google_service_account.cert_manager_dns_sa.email}"
+}
+
+# Set up the IAM binding for Workload Identity
+resource "google_service_account_iam_binding" "cert_manager_workload_identity" {
+  service_account_id = google_service_account.cert_manager_dns_sa.name
+  role               = "roles/iam.workloadIdentityUser"
+
+  members = [
+    "serviceAccount:${var.project_id}.svc.id.goog[cert-manager/cert-manager]"
+  ]
+}
+
+# resource "kubectl_manifest" "cluster_issuer_prod" {
+#   yaml_body = <<YAML
+# apiVersion: cert-manager.io/v1
+# kind: ClusterIssuer
+# metadata:
+#   name: letsencrypt-prod
+# spec:
+#   acme:
+#     server: https://acme-v02.api.letsencrypt.org/directory
+#     email: ${var.cert_manager_email}
+#     privateKeySecretRef:
+#       name: letsencrypt-prod-account-key
+#     solvers:
+#     - dns01:
+#         cloudDNS:
+#           project: ${var.project_id}
+#           hostedZoneName: ${var.dns_zone_name}
+# YAML
+
+#   depends_on = [
+#     helm_release.cert_manager,
+#     kubernetes_service_account.cert_manager_sa,
+#     google_service_account_iam_binding.cert_manager_workload_identity
+#   ]
+# }
+
+resource "kubectl_manifest" "prometheus_rule_cert_manager" {
+  yaml_body = <<YAML
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: cert-manager-alerts
+  namespace: monitoring
+spec:
+  groups:
+  - name: cert-manager.rules
+    rules:
+    - alert: CertificateExpiringSoon
+      expr: certmanager_certificate_expiration_timestamp_seconds < (time() + 604800)
+      for: 10m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Certificate {{ $labels.name }} is expiring soon"
+        description: "{{ $labels.name }} in namespace {{ $labels.namespace }} will expire in less than 7 days."
+    - alert: CertificateIssuanceFailed
+      expr: certmanager_certificate_ready_status{status="False"} == 1
+      for: 10m
+      labels:
+        severity: critical
+      annotations:
+        summary: "Certificate {{ $labels.name }} issuance failed"
+        description: "{{ $labels.name }} in namespace {{ $labels.namespace }} has not been issued successfully."
+YAML
+  depends_on = [
+    kubernetes_namespace.monitoring,
+    helm_release.prometheus_operator_crds
+  ]
+}
+
+resource "kubectl_manifest" "cluster_issuer_staging" {
+  yaml_body  = <<YAML
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-staging
+spec:
+  acme:
+    server: https://acme-staging-v02.api.letsencrypt.org/directory
+    email: ${var.cert_manager_email}
+    privateKeySecretRef:
+      name: letsencrypt-staging-account-key
+    solvers:
+    - dns01:
+        cloudDNS:
+          project: ${var.project_id}
+          hostedZoneName: ${var.dns_zone_name}
+YAML
+  depends_on = [helm_release.cert_manager]
+}
+
+# Install NGINX Ingress Controller
+resource "helm_release" "ingress_nginx" {
+  name             = "ingress-nginx"
+  repository       = "https://kubernetes.github.io/ingress-nginx"
+  chart            = "ingress-nginx"
+  namespace        = "ingress-nginx"
+  create_namespace = true
+  version          = "4.7.1"
+
+  set {
+    name  = "controller.service.type"
+    value = "LoadBalancer"
+  }
+
+  set {
+    name  = "controller.ingressClassResource.default"
+    value = "true"
+  }
+
+  depends_on = [
+    google_container_cluster.my_cluster,
+    time_sleep.wait_for_kubernetes
+  ]
+}
+
+# Wait until the ingress controller has an IP address
+resource "time_sleep" "wait_for_ingress_ip" {
+  depends_on      = [helm_release.ingress_nginx]
+  create_duration = "45s"
+}
+
+# Get the IP address of the NGINX Ingress Controller
+data "kubernetes_service" "ingress_nginx_controller" {
+  metadata {
+    name      = "ingress-nginx-controller"
+    namespace = "ingress-nginx"
+  }
+  depends_on = [
+    helm_release.ingress_nginx,
+    time_sleep.wait_for_ingress_ip
+  ]
+}
+
+# Deploy application
+resource "helm_release" "application" {
+  name  = "api-server"
+  chart = "${path.module}/charts/api-server" # Local path to your Helm chart director
+
+  depends_on = [
+    google_container_cluster.my_cluster,
+    helm_release.cert_manager,
+    kubectl_manifest.cluster_issuer_staging,
+    helm_release.istio_base,
+    helm_release.istio_discovery,
+    helm_release.istio_gateway,
+    helm_release.eggress_gateways,
+    helm_release.ingress_gateways
+  ]
+}
+
+# Create Certificate resources
+resource "kubectl_manifest" "api_certificate" {
+  yaml_body = <<YAML
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: api-server-tls
+  namespace: ${var.app_namespace}
+spec:
+  secretName: api-server-tls-secret
+  duration: 2160h
+  renewBefore: 360h
+  privateKey:
+    algorithm: RSA
+    encoding: PKCS1
+    size: 2048
+  dnsNames:
+  - ${var.api_domain_name}
+  issuerRef:
+    name: letsencrypt-staging
+    kind: ClusterIssuer
+    group: cert-manager.io
+YAML
+
+  depends_on = [
+    helm_release.application,
+    kubectl_manifest.cluster_issuer_staging,
+    helm_release.application
+  ]
+}
+
+# Create Ingress resources
+resource "kubectl_manifest" "api_ingress" {
+  yaml_body = <<YAML
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: api-server-ingress
+  namespace: ${var.app_namespace}
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: 50m
+spec:
+  tls:
+  - hosts:
+    - ${var.api_domain_name}
+    secretName: api-server-tls-secret
+  rules:
+  - host: ${var.api_domain_name}
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: app-service
+            port:
+              number: 80
+YAML
+
+  depends_on = [
+    kubectl_manifest.api_certificate,
+    helm_release.ingress_nginx,
+    helm_release.application
+  ]
+}
+
+########
+
+
+resource "google_dns_record_set" "api_domain" {
+  name         = "${var.api_domain_name}."
+  managed_zone = var.dns_zone_name
+  type         = "A"
+  ttl          = 300
+
+  rrdatas = [data.kubernetes_service.ingress_nginx_controller.status[0].load_balancer[0].ingress[0].ip]
+  project = var.project_id
+}
+
+resource "helm_release" "prometheus_operator_crds" {
+  name             = "prometheus-operator-crds"
+  repository       = "https://prometheus-community.github.io/helm-charts"
+  chart            = "prometheus-operator-crds"
+  namespace        = "monitoring"
+  version          = "0.1.1" # Check for the latest version
+  create_namespace = true
+
+  depends_on = [
+    google_container_cluster.my_cluster,
+    kubernetes_namespace.monitoring
+  ]
+}
+
+resource "helm_release" "istio_base" {
+  name       = "istio-base"
+  chart      = "${path.module}/charts/base" # Path to the base chart in your local directory
+  namespace  = kubernetes_namespace.istio_system.metadata[0].name
+  depends_on = [kubernetes_namespace.istio_system]
+}
+
+# Apply the istio-discovery (istiod) chart
+resource "helm_release" "istio_discovery" {
+  name       = "istiod"
+  chart      = "${path.module}/charts/istio-discovery" # Path to the istio-discovery chart
+  namespace  = kubernetes_namespace.istio_system.metadata[0].name
+  depends_on = [helm_release.istio_base]
+
+  timeout = 600
+
+  set {
+    name  = "global.hub"
+    value = "gcr.io/istio-release"
+  }
+
+  # Reduce resource requests for istiod
+  set {
+    name  = "pilot.resources.requests.cpu"
+    value = "200m" # Default is 500m
+  }
+  set {
+    name  = "pilot.resources.requests.memory"
+    value = "1024Mi" # Default is 2048Mi
+  }
+}
+
+# Apply the gateway chart (optional, for ingress)
+resource "helm_release" "istio_gateway" {
+  name       = "istio-gateway"
+  chart      = "${path.module}/charts/gateway" # Path to the gateway chart
+  namespace  = kubernetes_namespace.istio_system.metadata[0].name
+  depends_on = [helm_release.istio_discovery]
+}
+
+# Apply the gateways chart (optional, for additional gateway configurations)
+resource "helm_release" "eggress_gateways" {
+  name       = "eggress-gateways"
+  chart      = "${path.module}/charts/gateways/istio-egress" # Path to the gateways chart
+  namespace  = kubernetes_namespace.istio_system.metadata[0].name
+  depends_on = [helm_release.istio_gateway]
+}
+resource "helm_release" "ingress_gateways" {
+  name       = "istio-gateways"
+  chart      = "${path.module}/charts/gateways/istio-ingress" # Path to the gateways chart
+  namespace  = kubernetes_namespace.istio_system.metadata[0].name
+  depends_on = [helm_release.istio_gateway]
+}
+
+

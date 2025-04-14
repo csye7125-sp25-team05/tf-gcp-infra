@@ -1,0 +1,6 @@
+apiVersion: v2
+name: api-server
+version: 1.9.2
+description: A Helm chart for deploying a Go application
+type: application
+dependencies: []

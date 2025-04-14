@@ -1,0 +1,68 @@
+appName: api-server
+namespace:
+    app: api-server
+    db: api-db
+dependency:
+    name: api-server
+replicaCount: 1
+image:
+    repository: mayu007/api-server
+    tag: t2
+    pullPolicy: IfNotPresent
+service:
+    name: api-server
+    port: 8080
+env:
+    ENVIRONMENT: prod
+    BUCKET_NAME: csye7125-sp25-05
+    PROJECT_ID: csye7125-project-dev
+    GOOGLE_APPLICATION_CREDENTIALS: /var/secrets/google/credentials.json
+secrets:
+    gcpCredentials: L1VzZXJzL21heXVyZXNoLnNhdGFvQGdtYWlsLmNvbSIsImF1dGgiOiJiV0Y1ZFhKbElFd3lNVFkyTWpFM09ETTNNalk0T0RrNE1EY3dOelE9In19fQ==
+docker:
+    username: bWF5dTAwNw==
+    password: TWF5dXJlc2hAMTIz
+    email: bWF5dXJlc2guc2F0YW9AZ21haWwuY29t
+    auth: bWF5dXJlc2guc2F0YW9AZ21haWwuY29tOk1heXVyZXNoQDEyMw==
+apiServer:
+    image: mayu007/api-server:t5
+    bucketName: csye7125-sp25-05
+    projectId: csye7125-project-dev
+    replicas: 1
+    flywayImage: mayu007/api-server-db:t1
+    serviceAccountName: api-server-sa
+    namespace: api-server
+    automountToken: false
+postgres:
+    image: postgres:17
+    replicas: 1
+    storageClass: standard
+    storageSize: 1Gi
+    serviceName: postgres-service
+dbsecrets:
+    POSTGRES_DB: YXBp
+    POSTGRES_USER: d2ViYXBwX3VzZXI=
+    POSTGRES_PASSWORD: TWF5dXJlc2hAMTIz
+    DATABASE_URL: cG9zdGdyZXNxbDovL3dlYmFwcF91c2VyOk1heXVyZXNoQDEyM0Bwb3N0Z3Jlcy1zZXJ2aWNlOjU0MzIvYXBp
+postgresService:
+    serviceName: postgres
+    port: 5432
+    targetPort: 5432
+    selectorLabel: postgres
+loadbalancer:
+    serviceName: app-service
+    serviceType: LoadBalancer
+    appLabel: api-server
+    servicePort: 80
+    targetPort: 8080
+webapp:
+    serviceName: webapp-service
+    namespace: api-server
+    serviceType: NodePort
+    servicePort: 80
+    targetPort: 80
+    nodePort: 30000
+    appLabel: webapp
+istio:
+    revision: custom
+    excludeOutboundPorts: 5432
