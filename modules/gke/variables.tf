@@ -106,6 +106,7 @@ variable "cert_manager_namespace" {
 variable "api_domain_name" {
   type        = string
   description = "The name of the Domain"
+  default     = "dev.gcp.cyse7125-sp25-05.rocks"
 }
 
 variable "cert_manager_email" {
